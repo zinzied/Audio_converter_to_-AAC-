@@ -55,7 +55,8 @@ This Python script provides a graphical user interface (GUI) for converting audi
 
 ### Example
 
-![Screenshot](screenshot.png)
+![image](https://github.com/user-attachments/assets/5ea051f6-19bc-400d-b549-d222a8b8f822)
+
 
 ### Credits
 
