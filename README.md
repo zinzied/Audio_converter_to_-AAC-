@@ -20,7 +20,7 @@ This Python script provides a graphical user interface (GUI) for converting audi
 
 1. **Clone the repository**:
     ```sh
-    git clone https://github.com/yourusername/audioconverter.git
+    git clone https://github.com/zinzied/audioconverter.git
     cd audioconverter
     ```
 
