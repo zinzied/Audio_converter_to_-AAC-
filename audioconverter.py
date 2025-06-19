@@ -1,8 +1,9 @@
+# Test comment
 import webbrowser
 import os
 import shutil
 import subprocess
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QTextEdit
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QTextEdit, QLineEdit, QComboBox
 from PyQt5.QtCore import QThread, pyqtSignal
 
 class ConversionThread(QThread):
@@ -27,10 +28,13 @@ def convert_to_aac(input_file, output_file, progress_signal):
             '-c:a', 'aac',           # Audio codec
             '-b:a', '192k',          # Bitrate
             output_file              # Output file
-        ], check=True)
+        ], check=True, capture_output=True, text=True)
         progress_signal.emit(f"Conversion successful: {output_file}")
     except subprocess.CalledProcessError as e:
-        progress_signal.emit(f"Error during conversion: {e}")
+            error_message = f"Error converting {input_file}: {e.stderr}"
+            if not e.stderr: # If stderr is empty for some reason, provide a fallback
+                error_message = f"Error converting {input_file}: FFmpeg failed with exit code {e.returncode}. No detailed error message captured."
+            progress_signal.emit(error_message)
 
 def convert_files_in_folder(input_folder, output_folder, progress_signal):
     # Ensure the output folder exists
@@ -58,6 +62,15 @@ class AudioConverterApp(QWidget):
         
         self.input_label = QLabel('Input Folder: Not selected')
         self.output_label = QLabel('Output Folder: Not selected')
+        self.imgburn_path_label = QLabel('ImgBurn Path: Not selected')
+        self.imgburn_path_button = QPushButton('Select ImgBurn Path')
+        self.imgburn_path_button.clicked.connect(self.select_imgburn_path)
+        self.drive_letter_label = QLabel('CD/DVD Drive Letter (e.g., F:\\):')
+        self.drive_letter_input = QLineEdit()
+        self.drive_letter_input.setPlaceholderText("F:\\")
+        self.format_label = QLabel('Output Audio Format:')
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(['AAC', 'MP3', 'WAV'])
         self.status_label = QLabel('')
         self.credit_label = QLabel('<a href="https://github.com/zinzied"><font color="blue">Created By Zied Boughdir</font></a>')
         self.credit_label.linkActivated.connect
@@ -86,6 +99,12 @@ class AudioConverterApp(QWidget):
         layout.addWidget(self.input_button)
         layout.addWidget(self.output_label)
         layout.addWidget(self.output_button)
+        layout.addWidget(self.imgburn_path_label)
+        layout.addWidget(self.imgburn_path_button)
+        layout.addWidget(self.drive_letter_label)
+        layout.addWidget(self.drive_letter_input)
+        layout.addWidget(self.format_label)
+        layout.addWidget(self.format_combo)
         layout.addWidget(self.convert_button)
         layout.addWidget(self.add_files_button)
         layout.addWidget(self.burn_button)
@@ -97,6 +116,8 @@ class AudioConverterApp(QWidget):
         
         self.input_folder = None
         self.output_folder = None
+        self.imgburn_path = None
+        self.drive_letter = "F:\\"
         self.manual_files = []
         self.thread = None
     
@@ -111,6 +132,13 @@ class AudioConverterApp(QWidget):
         if folder:
             self.output_folder = folder
             self.output_label.setText(f'Output Folder: {folder}')
+
+    def select_imgburn_path(self):
+        options = QFileDialog.Options()
+        fileName, _ = QFileDialog.getOpenFileName(self, "Select ImgBurn Executable", "", "Executable Files (*.exe);;All Files (*)", options=options)
+        if fileName:
+            self.imgburn_path = fileName
+            self.imgburn_path_label.setText(f'ImgBurn Path: {fileName}')
     
     def convert_files(self):
         if self.input_folder and self.output_folder:
@@ -136,6 +164,21 @@ class AudioConverterApp(QWidget):
         self.status_label.setText('Conversion complete. Ready to burn files.')
     
     def burn_files(self):
+        if not self.imgburn_path:
+            self.status_label.setText('Please select the ImgBurn path first.')
+            return
+
+        drive = self.drive_letter_input.text().strip()
+        if not drive:
+            self.status_label.setText('Please enter the CD/DVD drive letter (e.g., F:\\).')
+            return
+        # Ensure the drive letter ends with a backslash, as commonly used in paths.
+        # ImgBurn might be flexible, but it's good practice.
+        if not drive.endswith('\\'):
+            drive += '\\'
+
+        self.drive_letter = drive # Store it, though it's read fresh each time here
+
         if not self.output_folder and not self.manual_files:
             self.status_label.setText('No files to burn.')
             return
@@ -158,10 +201,10 @@ class AudioConverterApp(QWidget):
             
             # Burn the files using ImgBurn
             subprocess.run([
-                'C:\\Program Files (x86)\\ImgBurn\\ImgBurn.exe',
+                self.imgburn_path,
                 '/MODE', 'BUILD',
                 '/SRC', temp_burn_folder,
-                '/DEST', 'F:\\',  # Assuming F: is the CD/DVD drive
+                '/DEST', drive,  # <-- This is the changed part
                 '/START',
                 '/CLOSE'
             ], check=True)
@@ -169,6 +212,8 @@ class AudioConverterApp(QWidget):
             self.status_label.setText('Burning process started.')
         except subprocess.CalledProcessError as e:
             self.status_label.setText(f"Error during burning: {e}")
+        except FileNotFoundError:
+            self.status_label.setText(f"Error: ImgBurn executable not found at {self.imgburn_path}")
 
 if __name__ == '__main__':
     app = QApplication([])
